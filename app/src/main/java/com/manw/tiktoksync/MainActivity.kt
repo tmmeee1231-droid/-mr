@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -385,7 +386,7 @@ private fun ManwScreen(
         if (showSaveFrom) {
             Text("اكتب رابط TikTok في صفحة SaveFrom بالأسفل، وشاهد النتيجة ونزّل من نفس الشاشة.")
             AndroidView(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f),
+                modifier = Modifier.fillMaxWidth().height(560.dp),
                 factory = { ctx ->
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = true
