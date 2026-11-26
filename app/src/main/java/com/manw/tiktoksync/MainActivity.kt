@@ -48,6 +48,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.VideoView
 import android.widget.MediaController
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -144,6 +145,7 @@ private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
 }
 
 private data class ResolvedVideo(val url: String, val fileName: String)
+private data class WhatsAppStatusFile(val uri: Uri, val name: String, val isVideo: Boolean)
 
 private const val MANW_RESOLVER_URL = "https://manw-tiktok-resolver-production.up.railway.app/resolve"
 
@@ -248,6 +250,24 @@ private fun ManwScreen(
         }
     }
 
+    var statusTreeUri by remember { mutableStateOf(prefs.getString("whatsapp_status_tree", null)) }
+    var statusFiles by remember { mutableStateOf<List<WhatsAppStatusFile>>(emptyList()) }
+    var selectedStatus by remember { mutableStateOf<WhatsAppStatusFile?>(null) }
+    var statusMessage by remember { mutableStateOf("اختر مجلد حالات واتساب لعرض الوسائط الموجودة على جهازك.") }
+    val statusFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            statusTreeUri = uri.toString()
+            prefs.edit().putString("whatsapp_status_tree", statusTreeUri).apply()
+            refreshStatusFiles(context, uri) { files, msg -> statusFiles = files; statusMessage = msg }
+        }
+    }
+    fun refreshStatuses() {
+        val raw = statusTreeUri
+        if (raw == null) statusMessage = "اختار مجلد حالات واتساب أولًا."
+        else refreshStatusFiles(context, Uri.parse(raw)) { files, msg -> statusFiles = files; statusMessage = msg }
+    }
+
     fun passwordHash(salt: String, value: String): String =
         MessageDigest.getInstance("SHA-256").digest((salt + value).toByteArray()).joinToString("") { "%02x".format(it) }
 
@@ -273,6 +293,23 @@ private fun ManwScreen(
             if (titleTaps >= 5) { adminOpen = true; titleTaps = 0; adminError = "" }
         })
         Text(subtitleText)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("مشاهدة حالات واتساب المحفوظة", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFF5262))
+                Text("يعرض الصور والفيديوهات التي حمّلها واتساب بالفعل على جهازك. لا يمكنه جلب حالات أشخاص غير متاحة لحسابك.")
+                Button(onClick = { statusFolderPicker.launch(statusTreeUri?.let { Uri.parse(it) }) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (statusTreeUri == null) "اختيار مجلد حالات واتساب" else "تغيير مجلد الحالات")
+                }
+                Button(onClick = { refreshStatuses() }, modifier = Modifier.fillMaxWidth()) { Text("تحديث الحالات") }
+                Text(statusMessage, style = MaterialTheme.typography.bodySmall)
+                statusFiles.forEach { item ->
+                    TextButton(onClick = { selectedStatus = item }, modifier = Modifier.fillMaxWidth()) {
+                        Text((if (item.isVideo) "▶  " else "▧  ") + item.name)
+                    }
+                }
+            }
+        }
 
         OutlinedTextField(
             value = newHandle, onValueChange = { newHandle = it },
@@ -378,6 +415,30 @@ private fun ManwScreen(
         }
     }
 
+    selectedStatus?.let { item ->
+        AlertDialog(
+            onDismissRequest = { selectedStatus = null },
+            title = { Text(item.name) },
+            text = {
+                if (item.isVideo) {
+                    AndroidView(modifier = Modifier.fillMaxWidth().height(320.dp), factory = { ctx ->
+                        VideoView(ctx).apply {
+                            setVideoURI(item.uri)
+                            setOnPreparedListener { player -> player.isLooping = false; start() }
+                        }
+                    })
+                } else {
+                    val bitmap = remember(item.uri) {
+                        runCatching { context.contentResolver.openInputStream(item.uri)?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull()
+                    }
+                    if (bitmap != null) Image(bitmap = bitmap, contentDescription = item.name, modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.Fit)
+                    else Text("تعذر فتح الصورة.")
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedStatus = null }) { Text("إغلاق") } }
+        )
+    }
+
     if (adminOpen) {
         val savedHash = prefs.getString("admin_hash", null)
         AlertDialog(
@@ -431,4 +492,15 @@ private fun ManwScreen(
             dismissButton = { TextButton(onClick = { adminOpen = false }) { Text("إلغاء") } }
         )
     }
+}
+
+private fun refreshStatusFiles(context: Context, treeUri: Uri, onResult: (List<WhatsAppStatusFile>, String) -> Unit) {
+    val files = runCatching {
+        DocumentFile.fromTreeUri(context, treeUri)?.listFiles()
+            ?.filter { it.isFile && (it.type?.startsWith("image/") == true || it.type?.startsWith("video/") == true) }
+            ?.sortedByDescending { it.lastModified() }
+            ?.map { WhatsAppStatusFile(it.uri, it.name ?: "حالة واتساب", it.type?.startsWith("video/") == true) }
+            ?: emptyList()
+    }.getOrDefault(emptyList())
+    onResult(files, if (files.isEmpty()) "لم يتم العثور على حالات. افتح الحالات داخل واتساب أولًا، ثم اضغط تحديث." else "تم العثور على ${files.size} حالة محفوظة.")
 }
