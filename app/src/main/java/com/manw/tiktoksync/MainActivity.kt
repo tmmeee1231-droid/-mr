@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val APP_ACCESS_PASSWORD = "manw1231\\$\\$"
+private const val APP_ACCESS_PASSWORD = "manw1231\$\$"
 
 @Composable
 private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
@@ -147,13 +147,13 @@ private data class ResolvedVideo(val url: String, val fileName: String)
 
 private fun extractTikTokMediaUrl(html: String): String? {
     val patterns = listOf(
-        Regex("\\\"downloadAddr\\\"\\\\s*:\\\\s*\\\"((?:\\\\\\\\.|[^\\\"\\\\\\\\])+)\\\""),
-        Regex("\\\"playAddr\\\"\\\\s*:\\\\s*\\\"((?:\\\\\\\\.|[^\\\"\\\\\\\\])+)\\\"")
+        Regex("\"downloadAddr\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])+)\""),
+        Regex("\"playAddr\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])+)\"")
     )
     for (pattern in patterns) {
         val raw = pattern.find(html)?.groupValues?.getOrNull(1) ?: continue
         val decoded = runCatching {
-            JSONObject("{\\\"value\\\":\\\"$raw\\\"}").getString("value")
+            JSONObject("{\"value\":\"$raw\"}").getString("value")
         }.getOrDefault(raw).replace("&amp;", "&")
         if (decoded.startsWith("https://") || decoded.startsWith("http://")) return decoded
     }
