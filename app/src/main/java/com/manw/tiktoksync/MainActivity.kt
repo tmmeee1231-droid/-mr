@@ -49,6 +49,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.net.HttpURLConnection
 import java.net.URL
@@ -100,7 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val APP_ACCESS_PASSWORD = "manw1231$"
+private const val APP_ACCESS_PASSWORD = "manw1231\\$\\$"
 
 @Composable
 private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
@@ -143,6 +144,22 @@ private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
 }
 
 private data class ResolvedVideo(val url: String, val fileName: String)
+
+private fun extractTikTokMediaUrl(html: String): String? {
+    val patterns = listOf(
+        Regex(""""downloadAddr"\\s*:\\s*"((?:\\\\.|[^"\\\\])+)""""),
+        Regex(""""playAddr"\\s*:\\s*"((?:\\\\.|[^"\\\\])+)"""")
+    )
+    for (pattern in patterns) {
+        val raw = pattern.find(html)?.groupValues?.getOrNull(1) ?: continue
+        val decoded = runCatching {
+            JSONObject("{\"value\":\"$raw\"}").getString("value")
+        }.getOrDefault(raw)
+            .replace("&amp;", "&")
+        if (decoded.startsWith("https://") || decoded.startsWith("http://")) return decoded
+    }
+    return null
+}
 
 private fun resolveVideoUrl(pageUrl: String): Result<ResolvedVideo> = runCatching {
     val parsed = Uri.parse(pageUrl)
@@ -189,8 +206,9 @@ private fun resolveVideoUrl(pageUrl: String): Result<ResolvedVideo> = runCatchin
                     ?: page.selectFirst("video source[src], video[src]")?.let {
                         it.absUrl("src").ifBlank { it.attr("src") }
                     }
+                    ?: extractTikTokMediaUrl(document)
                 require(!candidate.isNullOrBlank()) {
-                    "لم أجد رابط فيديو مباشرًا في الصفحة. جرّب رابط MP4 مباشرًا أو موقعًا يوفّر تنزيلًا رسميًا."
+                    "تيك توك لم يعرض رابط الفيديو مباشرة. افتح الفيديو واجعل الحساب/الفيديو عامًا، ثم جرّب نسخ رابط المشاركة مرة أخرى."
                 }
                 videoUrl = URL(connection.url, candidate).toString()
             }
@@ -217,6 +235,8 @@ private fun enqueueVideoDownload(context: Context, url: String, fileName: String
         .setTitle(fileName)
         .setDescription("𝑀𝒜𝒩𝒲 - تنزيل الفيديو")
         .setMimeType("video/*")
+        .addRequestHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
+        .addRequestHeader("Referer", "https://www.tiktok.com/")
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         .setAllowedOverMetered(true)
         .setAllowedOverRoaming(false)
