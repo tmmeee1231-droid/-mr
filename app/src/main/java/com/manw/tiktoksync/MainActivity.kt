@@ -43,6 +43,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.VideoView
+import android.widget.MediaController
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -77,23 +80,19 @@ class MainActivity : ComponentActivity() {
                     if (!unlocked) {
                         AppLockScreen(onUnlock = { unlocked = it })
                     } else {
-                        ManwScreen(sharedLink) { link, onStatus ->
-                            lifecycleScope.launch {
-                                onStatus("جاري فحص الرابط واستخراج الفيديو...")
-                                val result = withContext(Dispatchers.IO) { resolveVideoUrl(link) }
-                                if (result.isFailure) {
-                                    onStatus(result.exceptionOrNull()?.message ?: "تعذر استخراج الفيديو من هذا الرابط.")
-                                } else {
-                                    val media = result.getOrThrow()
-                                    val queued = enqueueVideoDownload(this@MainActivity, media.url, media.fileName)
-                                    onStatus(if (queued) {
-                                        "بدأ التحميل. ستجد الفيديو في مجلد Downloads."
-                                    } else {
-                                        "تعذر بدء التحميل على هذا الجهاز."
-                                    })
+                        ManwScreen(
+                            sharedLink = sharedLink,
+                            onResolve = { link, onResult ->
+                                lifecycleScope.launch {
+                                    val result = withContext(Dispatchers.IO) { resolveVideoUrl(link) }
+                                    onResult(result)
                                 }
+                            },
+                            onDownload = { media, onStatus ->
+                                val queued = enqueueVideoDownload(this@MainActivity, media.url, media.fileName)
+                                onStatus(if (queued) "تم إرسال الفيديو إلى مدير التنزيلات. تابع الإشعار للتأكد من اكتمال الحفظ." else "تعذر بدء التحميل على هذا الجهاز.")
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -248,7 +247,8 @@ private fun enqueueVideoDownload(context: Context, url: String, fileName: String
 @Composable
 private fun ManwScreen(
     sharedLink: String,
-    onDownload: (String, (String) -> Unit) -> Unit
+    onResolve: (String, (Result<ResolvedVideo>) -> Unit) -> Unit,
+    onDownload: (ResolvedVideo, (String) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("manw_accounts", 0) }
@@ -261,7 +261,9 @@ private fun ManwScreen(
     var selected by remember { mutableStateOf(handles.toSet()) }
     var newHandle by remember { mutableStateOf("") }
     var videoUrl by remember { mutableStateOf(sharedLink.trim()) }
-    var message by remember { mutableStateOf("أضف رابط فيديو من أي موقع يدعم رابط فيديو قابلًا للتنزيل.") }
+    var preview by remember { mutableStateOf<ResolvedVideo?>(null) }
+    var message by remember { mutableStateOf("ضع رابط الفيديو ثم اضغط «عرض الفيديو» لمعاينته قبل التنزيل.") }
+    var resolving by remember { mutableStateOf(false) }
     var downloading by remember { mutableStateOf(false) }
     var titleText by remember { mutableStateOf(prefs.getString("app_title", "𝑀𝒜𝒩𝒲 تيك توك") ?: "𝑀𝒜𝒩𝒲 تيك توك") }
     var subtitleText by remember { mutableStateOf(prefs.getString("app_subtitle", "إدارة الحسابات وتنزيل الفيديوهات") ?: "إدارة الحسابات وتنزيل الفيديوهات") }
@@ -350,16 +352,60 @@ private fun ManwScreen(
                 if (videoUrl.isBlank()) {
                     message = "ضع رابط الفيديو أولًا."
                 } else {
-                    downloading = true
-                    onDownload(videoUrl.trim()) { status ->
-                        message = status
-                        downloading = false
+                    resolving = true
+                    preview = null
+                    message = "جاري استخراج الفيديو..."
+                    onResolve(videoUrl.trim()) { result ->
+                        resolving = false
+                        if (result.isSuccess) {
+                            preview = result.getOrThrow()
+                            message = "تم تجهيز المعاينة. شاهد الفيديو ثم اضغط تنزيل إذا أردت."
+                        } else {
+                            message = result.exceptionOrNull()?.message ?: "تعذر تجهيز معاينة الفيديو."
+                        }
                     }
                 }
             },
-            enabled = !downloading,
+            enabled = !resolving && !downloading,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (downloading) "جاري التجهيز..." else "تحميل الفيديو") }
+        ) { Text(if (resolving) "جاري تجهيز المعاينة..." else "عرض الفيديو") }
+
+        preview?.let { media ->
+            Text(media.fileName, style = MaterialTheme.typography.titleSmall)
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        val controller = MediaController(ctx)
+                        controller.setAnchorView(this)
+                        setMediaController(controller)
+                        setVideoURI(Uri.parse(media.url))
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            start()
+                        }
+                    }
+                },
+                update = { view ->
+                    if (view.tag != media.url) {
+                        view.tag = media.url
+                        view.setVideoURI(Uri.parse(media.url))
+                        view.setOnPreparedListener { it.isLooping = false; view.start() }
+                    }
+                }
+            )
+            Button(
+                onClick = {
+                    downloading = true
+                    onDownload(media) { status ->
+                        message = status
+                        downloading = false
+                    }
+                },
+                enabled = !downloading,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (downloading) "جاري إرسال التنزيل..." else "تنزيل الفيديو") }
+        }
 
         Text(message, style = MaterialTheme.typography.bodySmall)
         Text(
