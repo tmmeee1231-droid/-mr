@@ -8,14 +8,24 @@ import android.os.Bundle
 import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -23,8 +33,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,6 +50,7 @@ import org.jsoup.Jsoup
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.security.MessageDigest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -172,6 +186,28 @@ private fun ManwScreen(
     var videoUrl by remember { mutableStateOf(sharedLink.trim()) }
     var message by remember { mutableStateOf("أضف رابط فيديو من أي موقع يدعم رابط فيديو قابلًا للتنزيل.") }
     var downloading by remember { mutableStateOf(false) }
+    var titleText by remember { mutableStateOf(prefs.getString("app_title", "𝑀𝒜𝒩𝒲 تيك توك") ?: "𝑀𝒜𝒩𝒲 تيك توك") }
+    var subtitleText by remember { mutableStateOf(prefs.getString("app_subtitle", "إدارة الحسابات وتنزيل الفيديوهات") ?: "إدارة الحسابات وتنزيل الفيديوهات") }
+    var backgroundUri by remember { mutableStateOf(prefs.getString("background_uri", null)) }
+    var adminOpen by remember { mutableStateOf(false) }
+    var adminPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var adminError by remember { mutableStateOf("") }
+    var titleTaps by remember { mutableIntStateOf(0) }
+    val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            backgroundUri = uri.toString()
+            prefs.edit().putString("background_uri", backgroundUri).apply()
+            message = "تم تغيير الخلفية على هذا الجهاز."
+        }
+    }
+
+    fun passwordHash(salt: String, value: String): String =
+        MessageDigest.getInstance("SHA-256").digest((salt + value).toByteArray()).joinToString("") { "%02x".format(it) }
 
     fun persist(values: List<String>) {
         handles = values
@@ -179,9 +215,22 @@ private fun ManwScreen(
         prefs.edit().putString("handles", JSONArray(values).toString()).apply()
     }
 
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("𝑀𝒜𝒩𝒲 تيك توك", style = MaterialTheme.typography.headlineMedium)
-        Text("إدارة الحسابات وتنزيل الفيديوهات")
+    val backgroundBitmap = remember(backgroundUri) {
+        backgroundUri?.let { raw -> runCatching {
+            context.contentResolver.openInputStream(Uri.parse(raw))?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+        }.getOrNull() }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        if (backgroundBitmap != null) {
+            Image(bitmap = backgroundBitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+        Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(titleText, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.clickable {
+            titleTaps++
+            if (titleTaps >= 5) { adminOpen = true; titleTaps = 0; adminError = "" }
+        })
+        Text(subtitleText)
 
         OutlinedTextField(
             value = newHandle, onValueChange = { newHandle = it },
@@ -238,6 +287,54 @@ private fun ManwScreen(
         Text(
             "تُحفظ التنزيلات في مجلد Downloads. تعمل الروابط المباشرة وصفحات الفيديو التي تعرض رابطًا عامًا؛ المواقع التي تتطلب تسجيل دخول أو تحمي الفيديو قد لا تدعم الاستخراج. لا تتم إزالة العلامة المائية من نسخة موجودة؛ استخدم النسخة الأصلية أو خيار التنزيل الرسمي بدون علامة إن وفره صاحب المحتوى.",
             style = MaterialTheme.typography.bodySmall
+        )
+        }
+    }
+
+    if (adminOpen) {
+        val savedHash = prefs.getString("admin_hash", null)
+        AlertDialog(
+            onDismissRequest = { adminOpen = false; adminPassword = ""; newPassword = ""; confirmPassword = ""; adminError = "" },
+            title = { Text(if (savedHash == null) "إنشاء كلمة مرور المشرف" else "لوحة المشرف") },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (savedHash != null) {
+                        OutlinedTextField(value = adminPassword, onValueChange = { adminPassword = it }, label = { Text("كلمة المرور الحالية") }, singleLine = true)
+                    }
+                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text(if (savedHash == null) "أنشئ كلمة مرور" else "كلمة المرور الجديدة") }, singleLine = true)
+                    OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("تأكيد كلمة المرور") }, singleLine = true)
+                    if (savedHash != null) {
+                        OutlinedTextField(value = titleText, onValueChange = { titleText = it }, label = { Text("اسم التطبيق داخل الواجهة") })
+                        OutlinedTextField(value = subtitleText, onValueChange = { subtitleText = it }, label = { Text("النص الظاهر أسفل الاسم") })
+                        Button(onClick = { backgroundPicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Text("اختيار صورة خلفية") }
+                    }
+                    if (adminError.isNotBlank()) Text(adminError, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newPassword.length < 6) {
+                        adminError = "كلمة المرور لازم تكون 6 أحرف على الأقل."
+                    } else if (newPassword != confirmPassword) {
+                        adminError = "تأكيد كلمة المرور غير مطابق."
+                    } else if (savedHash == null) {
+                        val salt = java.util.UUID.randomUUID().toString()
+                        prefs.edit().putString("admin_salt", salt).putString("admin_hash", passwordHash(salt, newPassword)).apply()
+                        adminOpen = false; adminError = ""; message = "تم إنشاء كلمة مرور المشرف."
+                    } else {
+                        val salt = prefs.getString("admin_salt", "").orEmpty()
+                        if (passwordHash(salt, adminPassword) != savedHash) {
+                            adminError = "كلمة المرور الحالية غير صحيحة."
+                        } else {
+                            prefs.edit().putString("admin_hash", passwordHash(salt, newPassword))
+                                .putString("app_title", titleText).putString("app_subtitle", subtitleText).apply()
+                            adminOpen = false; adminError = ""; adminPassword = ""; newPassword = ""; confirmPassword = ""
+                            message = "تم حفظ إعدادات التطبيق على هذا الجهاز."
+                        }
+                    }
+                }) { Text("حفظ") }
+            },
+            dismissButton = { TextButton(onClick = { adminOpen = false }) { Text("إلغاء") } }
         )
     }
 }
