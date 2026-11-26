@@ -504,7 +504,7 @@ private fun refreshStatusFiles(context: Context, treeUri: Uri, onResult: (List<W
             if (folder.name == ".Statuses" || directMedia.isNotEmpty()) return directMedia
             val statusFolder = children.firstOrNull { it.isDirectory && it.name == ".Statuses" }
             if (statusFolder != null) return statusFolder.listFiles().filter { it.isFile && (it.type?.startsWith("image/") == true || it.type?.startsWith("video/") == true) }
-            children.filter { it.isDirectory }.flatMap { findStatuses(it, depth + 1) }
+            return children.filter { it.isDirectory }.flatMap { findStatuses(it, depth + 1) }
         }
         findStatuses(root, 0).distinctBy { it.uri }.sortedByDescending { it.lastModified() }
             .map { WhatsAppStatusFile(it.uri, it.name ?: "حالة واتساب", it.type?.startsWith("video/") == true) }
