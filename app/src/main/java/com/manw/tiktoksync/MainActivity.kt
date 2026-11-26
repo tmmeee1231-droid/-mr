@@ -145,20 +145,7 @@ private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
 
 private data class ResolvedVideo(val url: String, val fileName: String)
 
-private fun extractTikTokMediaUrl(html: String): String? {
-    val patterns = listOf(
-        Regex("\"downloadAddr\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])+)\""),
-        Regex("\"playAddr\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])+)\"")
-    )
-    for (pattern in patterns) {
-        val raw = pattern.find(html)?.groupValues?.getOrNull(1) ?: continue
-        val decoded = runCatching {
-            JSONObject("{\"value\":\"$raw\"}").getString("value")
-        }.getOrDefault(raw).replace("&amp;", "&")
-        if (decoded.startsWith("https://") || decoded.startsWith("http://")) return decoded
-    }
-    return null
-}
+private const val MANW_RESOLVER_URL = "https://manw-tiktok-resolver-production.up.railway.app/resolve"
 
 private fun resolveVideoUrl(pageUrl: String): Result<ResolvedVideo> = runCatching {
     val parsed = Uri.parse(pageUrl)
@@ -166,67 +153,41 @@ private fun resolveVideoUrl(pageUrl: String): Result<ResolvedVideo> = runCatchin
         "أدخل رابطًا يبدأ بـ https:// أو http://"
     }
     require(!parsed.host.isNullOrBlank()) { "الرابط غير صحيح." }
-
-    val directExtension = parsed.lastPathSegment
-        ?.substringAfterLast('.', "")
-        ?.lowercase(Locale.ROOT)
-        ?.takeIf { it in setOf("mp4", "m4v", "mov", "webm", "3gp", "mkv") }
-
-    val videoUrl: String
-    var title = "MANW_video"
-
-    if (directExtension != null) {
-        videoUrl = pageUrl
-    } else {
-        val connection = (URL(pageUrl).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15000
-            readTimeout = 20000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
-        }
-        try {
-            connection.connect()
-            require(connection.responseCode in 200..299) {
-                "الموقع رفض فتح الرابط (\${connection.responseCode}). قد يحتاج تسجيل دخول أو لا يسمح بالتنزيل."
-            }
-            val contentType = connection.contentType.orEmpty()
-            if (contentType.startsWith("video/")) {
-                videoUrl = connection.url.toString()
-            } else {
-                val document = connection.inputStream.bufferedReader().use { it.readText() }
-                val page = Jsoup.parse(document, connection.url.toString())
-                title = page.selectFirst("meta[property=og:title]")?.attr("content")
-                    ?.takeIf { it.isNotBlank() }
-                    ?: page.title().takeIf { it.isNotBlank() }
-                    ?: title
-
-                val candidate = page.selectFirst("meta[property=og:video], meta[property=og:video:url], meta[name=twitter:player:stream]")?.attr("content")
-                    ?.takeIf { it.isNotBlank() }
-                    ?: page.selectFirst("video source[src], video[src]")?.let {
-                        it.absUrl("src").ifBlank { it.attr("src") }
-                    }
-                    ?: extractTikTokMediaUrl(document)
-                require(!candidate.isNullOrBlank()) {
-                    "تيك توك لم يعرض رابط الفيديو مباشرة. افتح الفيديو واجعل الحساب/الفيديو عامًا، ثم جرّب نسخ رابط المشاركة مرة أخرى."
-                }
-                videoUrl = URL(connection.url, candidate).toString()
-            }
-        } finally {
-            connection.disconnect()
-        }
+    val host = parsed.host!!.lowercase(Locale.ROOT)
+    require(host == "tiktok.com" || host.endsWith(".tiktok.com")) {
+        "حاليًا خدمة الاستخراج تدعم روابط TikTok العامة."
     }
 
-    val mediaUri = Uri.parse(videoUrl)
-    require(mediaUri.scheme == "https" || mediaUri.scheme == "http") { "رابط الفيديو المستخرج غير صالح." }
-    val extension = mediaUri.lastPathSegment
-        ?.substringAfterLast('.', "")
-        ?.lowercase(Locale.ROOT)
-        ?.takeIf { it in setOf("mp4", "m4v", "mov", "webm", "3gp", "mkv") }
-        ?: "mp4"
-    val safeTitle = title.replace(Regex("[^A-Za-z0-9 _-]"), "")
-        .trim().replace(Regex("\\s+"), "_").take(50)
-        .ifBlank { "MANW_video" }
-    ResolvedVideo(videoUrl, "$safeTitle.$extension")
+    val endpoint = URL("$MANW_RESOLVER_URL?url=" + java.net.URLEncoder.encode(pageUrl, "UTF-8"))
+    val connection = (endpoint.openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 20000
+        readTimeout = 300000
+        instanceFollowRedirects = true
+        setRequestProperty("Accept", "application/json")
+    }
+    try {
+        val status = connection.responseCode
+        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        val json = JSONObject(response.ifBlank { "{}" })
+        if (status !in 200..299) {
+            throw IllegalStateException(json.optString("error").ifBlank { "تعذر استخراج الفيديو (HTTP $status)." })
+        }
+        val direct = json.optString("download_url")
+        require(direct.startsWith("https://") || direct.startsWith("http://")) {
+            json.optString("error").ifBlank { "لم يتم العثور على فيديو عام في الرابط." }
+        }
+        val title = json.optString("title").replace(Regex("[^A-Za-z0-9 _-]"), "")
+            .trim().replace(Regex("\\s+"), "_").take(50).ifBlank { "MANW_video" }
+        val mediaUri = Uri.parse(direct)
+        val extension = mediaUri.lastPathSegment?.substringAfterLast('.', "")
+            ?.lowercase(Locale.ROOT)
+            ?.takeIf { it in setOf("mp4", "m4v", "mov", "webm", "3gp", "mkv") } ?: "mp4"
+        ResolvedVideo(direct, "$title.$extension")
+    } finally {
+        connection.disconnect()
+    }
 }
 
 private fun enqueueVideoDownload(context: Context, url: String, fileName: String): Boolean = runCatching {
