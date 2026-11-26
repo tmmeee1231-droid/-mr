@@ -496,11 +496,18 @@ private fun ManwScreen(
 
 private fun refreshStatusFiles(context: Context, treeUri: Uri, onResult: (List<WhatsAppStatusFile>, String) -> Unit) {
     val files = runCatching {
-        DocumentFile.fromTreeUri(context, treeUri)?.listFiles()
-            ?.filter { it.isFile && (it.type?.startsWith("image/") == true || it.type?.startsWith("video/") == true) }
-            ?.sortedByDescending { it.lastModified() }
-            ?.map { WhatsAppStatusFile(it.uri, it.name ?: "حالة واتساب", it.type?.startsWith("video/") == true) }
-            ?: emptyList()
+        val root = DocumentFile.fromTreeUri(context, treeUri)
+        fun findStatuses(folder: DocumentFile?, depth: Int): List<DocumentFile> {
+            if (folder == null || depth > 5) return emptyList()
+            val children = folder.listFiles().toList()
+            val directMedia = children.filter { it.isFile && (it.type?.startsWith("image/") == true || it.type?.startsWith("video/") == true) }
+            if (folder.name == ".Statuses" || directMedia.isNotEmpty()) return directMedia
+            val statusFolder = children.firstOrNull { it.isDirectory && it.name == ".Statuses" }
+            if (statusFolder != null) return statusFolder.listFiles().filter { it.isFile && (it.type?.startsWith("image/") == true || it.type?.startsWith("video/") == true) }
+            children.filter { it.isDirectory }.flatMap { findStatuses(it, depth + 1) }
+        }
+        findStatuses(root, 0).distinctBy { it.uri }.sortedByDescending { it.lastModified() }
+            .map { WhatsAppStatusFile(it.uri, it.name ?: "حالة واتساب", it.type?.startsWith("video/") == true) }
     }.getOrDefault(emptyList())
-    onResult(files, if (files.isEmpty()) "لم يتم العثور على حالات. افتح الحالات داخل واتساب أولًا، ثم اضغط تحديث." else "تم العثور على ${files.size} حالة محفوظة.")
+    onResult(files, if (files.isEmpty()) "لم يتم العثور على حالات. اختر مجلد WhatsApp/Media أو .Statuses، وافتح الحالات داخل واتساب أولًا ثم اضغط تحديث." else "تم العثور على ${files.size} حالة محفوظة.")
 }
