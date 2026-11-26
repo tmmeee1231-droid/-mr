@@ -46,6 +46,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.VideoView
 import android.widget.MediaController
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.URLUtil
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -265,6 +270,7 @@ private fun ManwScreen(
     var message by remember { mutableStateOf("ضع رابط الفيديو ثم اضغط «عرض الفيديو» لمعاينته قبل التنزيل.") }
     var resolving by remember { mutableStateOf(false) }
     var downloading by remember { mutableStateOf(false) }
+    var showSaveFrom by remember { mutableStateOf(false) }
     var titleText by remember { mutableStateOf(prefs.getString("app_title", "𝑀𝒜𝒩𝒲 تيك توك") ?: "𝑀𝒜𝒩𝒲 تيك توك") }
     var subtitleText by remember { mutableStateOf(prefs.getString("app_subtitle", "إدارة الحسابات وتنزيل الفيديوهات") ?: "إدارة الحسابات وتنزيل الفيديوهات") }
     var backgroundUri by remember { mutableStateOf(prefs.getString("background_uri", null)) }
@@ -369,6 +375,60 @@ private fun ManwScreen(
             enabled = !resolving && !downloading,
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (resolving) "جاري تجهيز المعاينة..." else "عرض الفيديو") }
+
+
+        Button(
+            onClick = { showSaveFrom = !showSaveFrom },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (showSaveFrom) "إخفاء صفحة التنزيل" else "فتح SaveFrom داخل التطبيق") }
+
+        if (showSaveFrom) {
+            Text("اكتب رابط TikTok في صفحة SaveFrom بالأسفل، وشاهد النتيجة ونزّل من نفس الشاشة.")
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f),
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.loadsImagesAutomatically = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        webChromeClient = WebChromeClient()
+                        webViewClient = WebViewClient()
+                        setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                            runCatching {
+                                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                                    .ifBlank { "MANW_video.mp4" }
+                                val request = DownloadManager.Request(Uri.parse(url))
+                                    .setTitle(fileName)
+                                    .setDescription("MANW - تنزيل الفيديو")
+                                    .setMimeType(mimeType ?: "video/*")
+                                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                    .setAllowedOverMetered(true)
+                                    .setAllowedOverRoaming(false)
+                                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                                if (!userAgent.isNullOrBlank()) request.addRequestHeader("User-Agent", userAgent)
+                                CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let { cookie ->
+                                    request.addRequestHeader("Cookie", cookie)
+                                }
+                                request.addRequestHeader("Referer", "https://ar.savefrom.net/")
+                                val manager = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                                manager.enqueue(request)
+                                message = "بدأ التنزيل. تابع إشعار التنزيل للتأكد من اكتماله."
+                            }.onFailure {
+                                message = "تعذر بدء التنزيل."
+                            }
+                        }
+                        loadUrl("https://ar.savefrom.net/")
+                    }
+                },
+                update = { view ->
+                    if (view.url.isNullOrBlank() || view.url == "about:blank") {
+                        view.loadUrl("https://ar.savefrom.net/")
+                    }
+                }
+            )
+        }
 
         preview?.let { media ->
             Text(media.fileName, style = MaterialTheme.typography.titleSmall)
