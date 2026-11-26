@@ -244,8 +244,8 @@ private fun ManwScreen(
         }, modifier = Modifier.fillMaxWidth()) { Text("إضافة حساب") }
 
         Text("الحسابات المحفوظة (\${handles.size})", style = MaterialTheme.typography.titleMedium)
-        LazyColumn(Modifier.weight(1f, fill = false)) {
-            items(handles, key = { it }) { handle ->
+        Column {
+            handles.forEach { handle ->
                 Card(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
