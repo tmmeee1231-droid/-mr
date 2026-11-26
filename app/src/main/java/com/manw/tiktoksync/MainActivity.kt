@@ -30,6 +30,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,27 +62,82 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         } else ""
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    ManwScreen(sharedLink) { link, onStatus ->
-                        lifecycleScope.launch {
-                            onStatus("جاري فحص الرابط واستخراج الفيديو...")
-                            val result = withContext(Dispatchers.IO) { resolveVideoUrl(link) }
-                            if (result.isFailure) {
-                                onStatus(result.exceptionOrNull()?.message ?: "تعذر استخراج الفيديو من هذا الرابط.")
-                            } else {
-                                val media = result.getOrThrow()
-                                val queued = enqueueVideoDownload(this@MainActivity, media.url, media.fileName)
-                                onStatus(if (queued) {
-                                    "بدأ التحميل. ستجد الفيديو في مجلد Downloads."
+            MaterialTheme(colorScheme = darkColorScheme(
+                primary = Color(0xFFFF2638),
+                onPrimary = Color.White,
+                secondary = Color(0xFF9B1020),
+                background = Color(0xFF050505),
+                surface = Color(0xFF101010),
+                onBackground = Color(0xFFF2F2F2),
+                onSurface = Color(0xFFF2F2F2)
+            )) {
+                Surface(Modifier.fillMaxSize(), color = Color(0xFF050505)) {
+                    var unlocked by remember { mutableStateOf(false) }
+                    if (!unlocked) {
+                        AppLockScreen(onUnlock = { unlocked = it })
+                    } else {
+                        ManwScreen(sharedLink) { link, onStatus ->
+                            lifecycleScope.launch {
+                                onStatus("جاري فحص الرابط واستخراج الفيديو...")
+                                val result = withContext(Dispatchers.IO) { resolveVideoUrl(link) }
+                                if (result.isFailure) {
+                                    onStatus(result.exceptionOrNull()?.message ?: "تعذر استخراج الفيديو من هذا الرابط.")
                                 } else {
-                                    "تعذر بدء التحميل على هذا الجهاز."
-                                })
+                                    val media = result.getOrThrow()
+                                    val queued = enqueueVideoDownload(this@MainActivity, media.url, media.fileName)
+                                    onStatus(if (queued) {
+                                        "بدأ التحميل. ستجد الفيديو في مجلد Downloads."
+                                    } else {
+                                        "تعذر بدء التحميل على هذا الجهاز."
+                                    })
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private const val APP_ACCESS_PASSWORD = "manw1231$"
+
+@Composable
+private fun AppLockScreen(onUnlock: (Boolean) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("☠", color = Color(0xFFFF2638), style = MaterialTheme.typography.displayLarge)
+            Text("𝑀𝒜𝒩𝒲", color = Color(0xFFFF2638), style = MaterialTheme.typography.headlineLarge)
+            Text("RESTRICTED SYSTEM", color = Color(0xFFB71C2C), style = MaterialTheme.typography.titleMedium)
+            Text("أدخل كلمة المرور للمتابعة", color = Color(0xFFE0E0E0))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it; error = "" },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("كلمة مرور الدخول") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation()
+            )
+            Button(
+                onClick = {
+                    if (password == APP_ACCESS_PASSWORD) onUnlock(true)
+                    else error = "كلمة المرور غير صحيحة"
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("فتح التطبيق") }
+            if (error.isNotBlank()) {
+                Text(error, color = Color(0xFFFF5262))
+            }
+            Text("⚠ ACCESS PROTECTED ⚠", color = Color(0xFF777777), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
