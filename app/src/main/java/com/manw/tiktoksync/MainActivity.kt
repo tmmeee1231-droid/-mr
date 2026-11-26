@@ -190,6 +190,7 @@ private fun ManwScreen(
     var subtitleText by remember { mutableStateOf(prefs.getString("app_subtitle", "إدارة الحسابات وتنزيل الفيديوهات") ?: "إدارة الحسابات وتنزيل الفيديوهات") }
     var backgroundUri by remember { mutableStateOf(prefs.getString("background_uri", null)) }
     var adminOpen by remember { mutableStateOf(false) }
+    var adminUnlocked by remember { mutableStateOf(false) }
     var adminPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -298,39 +299,46 @@ private fun ManwScreen(
             title = { Text(if (savedHash == null) "إنشاء كلمة مرور المشرف" else "لوحة المشرف") },
             text = {
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (savedHash != null) {
-                        OutlinedTextField(value = adminPassword, onValueChange = { adminPassword = it }, label = { Text("كلمة المرور الحالية") }, singleLine = true)
-                    }
-                    OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text(if (savedHash == null) "أنشئ كلمة مرور" else "كلمة المرور الجديدة") }, singleLine = true)
-                    OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("تأكيد كلمة المرور") }, singleLine = true)
-                    if (savedHash != null) {
+                    if (savedHash == null) {
+                        OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text("أنشئ كلمة مرور") }, singleLine = true)
+                        OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("تأكيد كلمة المرور") }, singleLine = true)
+                    } else if (!adminUnlocked) {
+                        OutlinedTextField(value = adminPassword, onValueChange = { adminPassword = it }, label = { Text("كلمة مرور المشرف") }, singleLine = true)
+                    } else {
                         OutlinedTextField(value = titleText, onValueChange = { titleText = it }, label = { Text("اسم التطبيق داخل الواجهة") })
                         OutlinedTextField(value = subtitleText, onValueChange = { subtitleText = it }, label = { Text("النص الظاهر أسفل الاسم") })
                         Button(onClick = { backgroundPicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) { Text("اختيار صورة خلفية") }
+                        OutlinedTextField(value = newPassword, onValueChange = { newPassword = it }, label = { Text("كلمة مرور جديدة (اختياري)") }, singleLine = true)
+                        if (newPassword.isNotBlank()) OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("تأكيد كلمة المرور الجديدة") }, singleLine = true)
                     }
                     if (adminError.isNotBlank()) Text(adminError, color = MaterialTheme.colorScheme.error)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (newPassword.length < 6) {
-                        adminError = "كلمة المرور لازم تكون 6 أحرف على الأقل."
-                    } else if (newPassword != confirmPassword) {
-                        adminError = "تأكيد كلمة المرور غير مطابق."
-                    } else if (savedHash == null) {
-                        val salt = java.util.UUID.randomUUID().toString()
-                        prefs.edit().putString("admin_salt", salt).putString("admin_hash", passwordHash(salt, newPassword)).apply()
-                        adminOpen = false; adminError = ""; message = "تم إنشاء كلمة مرور المشرف."
-                    } else {
-                        val salt = prefs.getString("admin_salt", "").orEmpty()
-                        if (passwordHash(salt, adminPassword) != savedHash) {
-                            adminError = "كلمة المرور الحالية غير صحيحة."
-                        } else {
-                            prefs.edit().putString("admin_hash", passwordHash(salt, newPassword))
-                                .putString("app_title", titleText).putString("app_subtitle", subtitleText).apply()
-                            adminOpen = false; adminError = ""; adminPassword = ""; newPassword = ""; confirmPassword = ""
-                            message = "تم حفظ إعدادات التطبيق على هذا الجهاز."
+                    if (savedHash == null) {
+                        if (newPassword.length < 6) adminError = "كلمة المرور لازم تكون 6 أحرف على الأقل."
+                        else if (newPassword != confirmPassword) adminError = "تأكيد كلمة المرور غير مطابق."
+                        else {
+                            val salt = java.util.UUID.randomUUID().toString()
+                            prefs.edit().putString("admin_salt", salt).putString("admin_hash", passwordHash(salt, newPassword)).apply()
+                            adminUnlocked = true; newPassword = ""; confirmPassword = ""; adminError = ""
                         }
+                    } else if (!adminUnlocked) {
+                        val salt = prefs.getString("admin_salt", "").orEmpty()
+                        if (passwordHash(salt, adminPassword) != savedHash) adminError = "كلمة المرور غير صحيحة."
+                        else { adminUnlocked = true; adminPassword = ""; adminError = "" }
+                    } else if (newPassword.isNotBlank() && (newPassword.length < 6 || newPassword != confirmPassword)) {
+                        adminError = if (newPassword.length < 6) "كلمة المرور لازم تكون 6 أحرف على الأقل." else "تأكيد كلمة المرور غير مطابق."
+                    } else {
+                        val edit = prefs.edit().putString("app_title", titleText).putString("app_subtitle", subtitleText)
+                        if (newPassword.isNotBlank()) {
+                            val salt = java.util.UUID.randomUUID().toString()
+                            edit.putString("admin_salt", salt).putString("admin_hash", passwordHash(salt, newPassword))
+                        }
+                        edit.apply()
+                        adminOpen = false; adminUnlocked = false; adminError = ""; adminPassword = ""; newPassword = ""; confirmPassword = ""
+                        message = "تم حفظ إعدادات التطبيق على هذا الجهاز."
                     }
                 }) { Text("حفظ") }
             },
