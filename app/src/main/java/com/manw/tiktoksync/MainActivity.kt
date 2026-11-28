@@ -219,7 +219,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         listOf(Triple("⚙", "الإعدادات", "settings"), Triple("▦", "جميع التطبيقات", "apps")).forEach { item ->
-                                            NeonCard(Modifier.weight(1f).height(118.dp)) {
+                                            NeonCard(Modifier.weight(1f).height(118.dp).combinedClickable(onClick = { page = item.third })) {
                                                 Text(item.first, color = Neon, fontSize = 30.sp)
                                                 Spacer(Modifier.height(8.dp))
                                                 Text(item.second, color = Color.White, fontWeight = FontWeight.Bold)
@@ -229,7 +229,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         listOf("ⓘ" to "حول التطبيق", "☆" to "تقييم التطبيق").forEach { item ->
-                                            NeonCard(Modifier.weight(1f).height(90.dp)) {
+                                            NeonCard(Modifier.weight(1f).height(90.dp).combinedClickable(onClick = { message = if (item.second == "حول التطبيق") "MANW AHMED • تطبيق الشاشة الرئيسية وإدارة التطبيقات داخل MANW" else "شكرًا لدعمك MANW" })) {
                                                 Text(item.first, color = Neon, fontSize = 25.sp)
                                                 Text(item.second, color = Color.White, fontWeight = FontWeight.Bold)
                                             }
