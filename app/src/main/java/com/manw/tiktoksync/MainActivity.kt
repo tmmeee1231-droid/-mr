@@ -31,7 +31,7 @@ import rikka.shizuku.Shizuku
 private val NeonRed = Color(0xFFFF2638)
 private val Dark = Color(0xFF08090D)
 private val Panel = Color(0xFF151821)
-private const val ACCESS_PASSWORD = "manw1231$$"
+private const val ACCESS_PASSWORD = "manw1231\$\$"
 private const val SHIZUKU_REQUEST_CODE = 7412
 
 private data class LaunchableApp(val packageName: String, val label: String)
