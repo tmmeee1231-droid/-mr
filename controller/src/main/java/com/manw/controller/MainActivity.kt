@@ -44,7 +44,8 @@ class MainActivity : ComponentActivity() {
         streamSocket = null
         commandOutput = null
     }
-    private fun sendInput(command: String) { runCatching { synchronized(commandOutput ?: return) { commandOutput?.write((command + "\\n").toByteArray()); commandOutput?.flush() } } }\n    private fun readLine(input: java.io.InputStream): String {
+    private fun sendInput(command: String) { runCatching { synchronized(commandOutput ?: return) { commandOutput?.write((command + "\n").toByteArray()); commandOutput?.flush() } } }
+    private fun readLine(input: java.io.InputStream): String {
         val bytes = ByteArrayOutputStream()
         while (bytes.size() < 256) {
             val b = input.read()
@@ -76,7 +77,9 @@ class MainActivity : ComponentActivity() {
                                 try {
                                     Socket().use { s ->
                                         s.connect(InetSocketAddress(ip.trim(), 45821), 5000); s.soTimeout = 0
-                                        val input = s.getInputStream(); val out = s.getOutputStream()\n                                        streamSocket = s\n                                        commandOutput = out
+                                        val input = s.getInputStream(); val out = s.getOutputStream()
+                                        streamSocket = s
+                                        commandOutput = out
                                         out.write("PAIR|$pin\nSCREEN\n".toByteArray()); out.flush()
                                         val reply = readLine(input)
                                         check(reply == "PAIRED") { if (reply == "DENIED") "رمز الربط غير صحيح" else "فشل التحقق: $reply" }
