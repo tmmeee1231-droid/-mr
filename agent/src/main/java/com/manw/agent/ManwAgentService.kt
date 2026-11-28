@@ -144,7 +144,7 @@ class ManwAgentService : Service() {
                     "STATUS" -> { output.write("MANW AGENT • الخدمة تعمل في الخلفية\n".toByteArray()); output.flush() }
                     "SCREEN" -> {
                         if (projection == null) { output.write("NO_PROJECTION\n".toByteArray()); output.flush(); return }
-                        output.write("SCREEN_READY\n".toByteArray()); output.flush()
+                        output.write("SCREEN_READY\n".toByteArray()); output.flush()\n                        socket.soTimeout = 0
                         streaming.set(true)
                         streamOut = output
                         Thread {
