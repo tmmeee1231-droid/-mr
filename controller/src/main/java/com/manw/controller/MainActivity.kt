@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var commandOutput: OutputStream? = null
     private val streaming = AtomicBoolean(false)
 
-    private fun setImmersive(enabled: Boolean) {
+    private fun applyImmersiveMode(enabled: Boolean) {
         WindowCompat.setDecorFitsSystemWindows(window, !enabled)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         if (enabled) {
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        setImmersive(false)
+        applyImmersiveMode(false)
         stopScreen()
         super.onDestroy()
     }
@@ -184,7 +184,7 @@ class MainActivity : ComponentActivity() {
                             TextButton(onClick = { sendInput("BACK") }) { Text("رجوع", color = Color.White) }
                             TextButton(onClick = { sendInput("HOME") }) { Text("الرئيسية", color = Color.White) }
                             TextButton(onClick = { sendInput("RECENTS") }) { Text("التطبيقات", color = Color.White) }
-                            TextButton(onClick = { fullscreen = false; setImmersive(false) }) { Text("خروج", color = Red) }
+                            TextButton(onClick = { fullscreen = false; applyImmersiveMode(false) }) { Text("خروج", color = Red) }
                         }
                         Text("MANW • LIVE", Modifier.align(androidx.compose.ui.Alignment.BottomStart)
                             .background(Color(0xAA09090B)).padding(8.dp), color = Color.White, fontSize = 10.sp)
@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity() {
                             Button(onClick = { connectScreen() }, enabled = !busy && !connected,
                                 colors = ButtonDefaults.buttonColors(containerColor = Red)) { Text(if (busy) "جاري الاتصال" else "فتح الشاشة") }
                             OutlinedButton(onClick = { stopScreen(); connected = false; busy = false; screen = null; status = "STOPPED" }) { Text("إيقاف", color = Red) }
-                            if (connected) OutlinedButton(onClick = { fullscreen = true; setImmersive(true) }) { Text("ملء الشاشة", color = Red) }
+                            if (connected) OutlinedButton(onClick = { fullscreen = true; applyImmersiveMode(true) }) { Text("ملء الشاشة", color = Red) }
                         }
                         Text(status, color = if (connected) Color(0xFF57E389) else Color.White)
                         Card(colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth().weight(1f)) {
