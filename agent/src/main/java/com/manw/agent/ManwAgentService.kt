@@ -153,7 +153,7 @@ class ManwAgentService : Service() {
                                 while (!socket.isClosed) {
                                     val command = readLine(input)
                                     if (command.isBlank()) break
-                                    val parts = command.split("|")
+                                    val parts = command.split("|", limit = 2)
                                     when (parts.firstOrNull()) {
                                         "TAP" -> if (parts.size == 3) ManwRemoteAccessibilityService.tap(parts[1].toFloatOrNull() ?: -1f, parts[2].toFloatOrNull() ?: -1f)
                                         "SWIPE" -> if (parts.size == 6) ManwRemoteAccessibilityService.swipe(
