@@ -10,6 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -129,6 +131,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Shizuku.addRequestPermissionResultListener(permissionListener)
@@ -216,14 +219,6 @@ class MainActivity : ComponentActivity() {
                                     Button(onClick = { secretPanel = false }, modifier = Modifier.fillMaxWidth()) {
                                         Text("رجوع")
                                     }
-                                    Card(colors = CardDefaults.cardColors(containerColor = Panel.copy(alpha = 0.96f))) {
-                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text(shizukuStatus, color = Color.White, fontSize = 13.sp)
-                                            Button(onClick = { connectShizuku() }, modifier = Modifier.fillMaxWidth()) {
-                                                Text("الاتصال بـ Shizuku")
-                                            }
-                                        }
-                                    }
                                     val hiddenApps = hidden.map { pkg ->
                                         LaunchableApp(pkg, prefs.getString("label_$pkg", pkg) ?: pkg)
                                     }
@@ -271,22 +266,27 @@ class MainActivity : ComponentActivity() {
                                     } else {
                                         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             items(visibleApps, key = { it.packageName }) { app ->
-                                                Row(Modifier.fillMaxWidth().background(Panel.copy(alpha = 0.96f), RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                                        Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                                        Text(app.packageName, color = Color.Gray, fontSize = 10.sp)
-                                                    }
-                                                    Button(onClick = {
-                                                        changePackageState(app, false) { success, message ->
-                                                            infoMessage = message
-                                                            if (success) {
-                                                                hidden.add(app.packageName)
-                                                                prefs.edit().putString("label_${app.packageName}", app.label).apply()
-                                                                saveHidden()
-                                                                apps = installedLaunchableApps()
+                                                Row(
+                                                    Modifier.fillMaxWidth()
+                                                        .background(Panel.copy(alpha = 0.96f), RoundedCornerShape(14.dp))
+                                                        .combinedClickable(
+                                                            onClick = { },
+                                                            onLongClick = {
+                                                                if (!hidden.contains(app.packageName)) {
+                                                                    hidden.add(app.packageName)
+                                                                    prefs.edit().putString("label_${app.packageName}", app.label).apply()
+                                                                    saveHidden()
+                                                                    infoMessage = "تم وضع ${app.label} في الأمان"
+                                                                }
                                                             }
-                                                        }
-                                                    }) { Text("إخفاء") }
+                                                        )
+                                                        .padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(Modifier.weight(1f)) {
+                                                        Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                                        Text("اضغط مطولاً لوضعه في الأمان", color = Color.Gray, fontSize = 10.sp)
+                                                    }
                                                 }
                                             }
                                         }
