@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
                                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else startAgentService()
                         } else {
-                            stopService(Intent(this@MainActivity, ManwAgentService::class.java).setAction(ManwAgentService.ACTION_STOP))
+                            startService(Intent(this@MainActivity, ManwAgentService::class.java).setAction(ManwAgentService.ACTION_STOP))
                             listening = false
                             message = "تم إيقاف خدمة MANW"
                         }
