@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -28,7 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
-private val NeonRed = Color(0xFFFF2638)
+private val NeonRed = Color(0xFF35FF8A)
 private val Dark = Color(0xFF08090D)
 private val Panel = Color(0xFF151821)
 private const val ACCESS_PASSWORD = "manw1231\$\$"
@@ -142,7 +146,8 @@ class MainActivity : ComponentActivity() {
                         addAll(prefs.getStringSet("hidden_packages", emptySet()) ?: emptySet())
                     }
                 }
-                var showHidden by remember { mutableStateOf(false) }
+                var secretPanel by remember { mutableStateOf(false) }
+                var titleTaps by remember { mutableIntStateOf(0) }
                 var infoMessage by remember { mutableStateOf("") }
 
                 fun saveHidden() {
@@ -174,81 +179,121 @@ class MainActivity : ComponentActivity() {
                             }, modifier = Modifier.fillMaxWidth()) { Text("دخول") }
                         }
                     } else {
-                        Column(
-                            Modifier.fillMaxSize().padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text("☠  MANW", color = NeonRed, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                            Text("APP HIDER  //  NORMAL APP", color = Color.LightGray, fontSize = 12.sp)
-                            Text("حدد التطبيقات التي تريد إخفاءها أو إظهارها من هنا.", color = Color.White)
-                            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
-                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(shizukuStatus, color = Color.White, fontSize = 13.sp)
-                                    Button(onClick = { connectShizuku() }, modifier = Modifier.fillMaxWidth()) {
-                                        Text("الاتصال بـ Shizuku / طلب الإذن")
+                        Box(Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(listOf(Color(0xFF020806), Color(0xFF07130F), Dark))
+                        )) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                var x = 8f
+                                while (x < size.width) {
+                                    drawLine(Color(0x1835FF8A), Offset(x, 0f), Offset(x, size.height), 1f)
+                                    x += 34f
+                                }
+                                var y = 18f
+                                while (y < size.height) {
+                                    drawLine(Color(0x1235FF8A), Offset(0f, y), Offset(size.width, y), 1f)
+                                    y += 34f
+                                }
+                            }
+                            Text(
+                                "𝑴𝑨𝑵𝑾<𝑨𝑯𝑴𝑬𝑫>𓄿",
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+                                color = Color(0x2235FF8A), fontSize = 24.sp, fontWeight = FontWeight.Black
+                            )
+                            Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(
+                                    "ꪑꪖ᭢᭙👊<ꪖꫝꪑꫀᦔ>",
+                                    modifier = Modifier.clickable {
+                                        titleTaps++
+                                        if (titleTaps >= 5) {
+                                            secretPanel = true
+                                            titleTaps = 0
+                                        }
+                                    },
+                                    color = Color(0xFF35FF8A), fontSize = 25.sp, fontWeight = FontWeight.Black
+                                )
+                                if (secretPanel) {
+                                    Text("PRIVATE CONTROL", color = Color.LightGray, fontSize = 11.sp)
+                                    Button(onClick = { secretPanel = false }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("رجوع")
                                     }
-                                    Text("يجب تثبيت Shizuku وتشغيله من خلال التصحيح اللاسلكي أو الروت.", color = Color.Gray, fontSize = 11.sp)
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                FilterChip(selected = !showHidden, onClick = { showHidden = false }, label = { Text("التطبيقات") })
-                                FilterChip(selected = showHidden, onClick = { showHidden = true }, label = { Text("المخفية (${hidden.size})") })
-                                Spacer(Modifier.weight(1f))
-                                TextButton(onClick = { apps = installedLaunchableApps() }) { Text("تحديث") }
-                            }
-                            val hiddenApps = hidden.map { pkg ->
-                                LaunchableApp(pkg, prefs.getString("label_$pkg", pkg) ?: pkg)
-                            }
-                            val shownApps = apps.filter { it.packageName !in hidden }
-                            val list = if (showHidden) hiddenApps else shownApps
-                            if (list.isEmpty()) {
-                                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                                    Text(if (showHidden) "لا توجد تطبيقات مخفية" else "لم يتم العثور على تطبيقات", color = Color.Gray)
-                                }
-                            } else {
-                                LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(list, key = { it.packageName }) { app ->
-                                        Row(
-                                            Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(14.dp)).padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                                Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                                Text(app.packageName, color = Color.Gray, fontSize = 10.sp)
+                                    Card(colors = CardDefaults.cardColors(containerColor = Panel.copy(alpha = 0.96f))) {
+                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(shizukuStatus, color = Color.White, fontSize = 13.sp)
+                                            Button(onClick = { connectShizuku() }, modifier = Modifier.fillMaxWidth()) {
+                                                Text("الاتصال بـ Shizuku")
                                             }
-                                            if (showHidden) {
-                                                OutlinedButton(onClick = {
-                                                    changePackageState(app, true) { success, message ->
-                                                        infoMessage = message
-                                                        if (success) {
-                                                            hidden.remove(app.packageName)
-                                                            saveHidden()
-                                                            apps = installedLaunchableApps()
-                                                        }
+                                        }
+                                    }
+                                    val hiddenApps = hidden.map { pkg ->
+                                        LaunchableApp(pkg, prefs.getString("label_$pkg", pkg) ?: pkg)
+                                    }
+                                    if (hiddenApps.isEmpty()) {
+                                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                            Text("لا توجد عناصر", color = Color.Gray)
+                                        }
+                                    } else {
+                                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            items(hiddenApps, key = { it.packageName }) { app ->
+                                                Row(Modifier.fillMaxWidth().background(Panel.copy(alpha = 0.96f), RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                                        Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                                        Text(app.packageName, color = Color.Gray, fontSize = 10.sp)
                                                     }
-                                                }) { Text("إظهار") }
-                                            } else {
-                                                Button(onClick = {
-                                                    changePackageState(app, false) { success, message ->
-                                                        infoMessage = message
-                                                        if (success) {
-                                                            hidden.add(app.packageName)
-                                                            prefs.edit().putString("label_${app.packageName}", app.label).apply()
-                                                            saveHidden()
-                                                            apps = installedLaunchableApps()
+                                                    OutlinedButton(onClick = {
+                                                        changePackageState(app, true) { success, message ->
+                                                            infoMessage = message
+                                                            if (success) {
+                                                                hidden.remove(app.packageName)
+                                                                saveHidden()
+                                                                apps = installedLaunchableApps()
+                                                            }
                                                         }
+                                                    }) { Text("إظهار") }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Text("التطبيقات", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                    Card(colors = CardDefaults.cardColors(containerColor = Panel.copy(alpha = 0.96f))) {
+                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(shizukuStatus, color = Color.White, fontSize = 13.sp)
+                                            Button(onClick = { connectShizuku() }, modifier = Modifier.fillMaxWidth()) {
+                                                Text("الاتصال بـ Shizuku")
+                                            }
+                                        }
+                                    }
+                                    val visibleApps = apps.filter { it.packageName !in hidden }
+                                    if (visibleApps.isEmpty()) {
+                                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                            Text("لا توجد تطبيقات", color = Color.Gray)
+                                        }
+                                    } else {
+                                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            items(visibleApps, key = { it.packageName }) { app ->
+                                                Row(Modifier.fillMaxWidth().background(Panel.copy(alpha = 0.96f), RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                                        Text(app.label, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                                        Text(app.packageName, color = Color.Gray, fontSize = 10.sp)
                                                     }
-                                                }) { Text("إخفاء") }
+                                                    Button(onClick = {
+                                                        changePackageState(app, false) { success, message ->
+                                                            infoMessage = message
+                                                            if (success) {
+                                                                hidden.add(app.packageName)
+                                                                prefs.edit().putString("label_${app.packageName}", app.label).apply()
+                                                                saveHidden()
+                                                                apps = installedLaunchableApps()
+                                                            }
+                                                        }
+                                                    }) { Text("إخفاء") }
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                if (infoMessage.isNotBlank()) Text(infoMessage, color = Color(0xFF9BE7A5), fontSize = 12.sp)
                             }
-                            if (infoMessage.isNotBlank()) Text(infoMessage, color = Color(0xFF9BE7A5), fontSize = 12.sp)
-                            Text(
-                                "ملاحظة: الإخفاء هنا يعطّل التطبيق المختار على أندرويد، فيختفي من المشغّل. إظهاره يعيد تفعيله. قد ترفض بعض تطبيقات النظام التعطيل.",
-                                color = Color.Gray, fontSize = 11.sp
-                            )
                         }
                     }
                 }
