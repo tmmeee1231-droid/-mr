@@ -4,7 +4,8 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionManager\nimport android.provider.Settings
+import android.media.projection.MediaProjectionManager
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
