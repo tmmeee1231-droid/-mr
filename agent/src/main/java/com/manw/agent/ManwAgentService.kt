@@ -147,6 +147,23 @@ class ManwAgentService : Service() {
                         output.write("SCREEN_READY\n".toByteArray()); output.flush()
                         streaming.set(true)
                         streamOut = output
+                        Thread {
+                            try {
+                                while (!socket.isClosed) {
+                                    val command = readLine(input)
+                                    if (command.isBlank()) break
+                                    val parts = command.split("|")
+                                    when (parts.firstOrNull()) {
+                                        "TAP" -> if (parts.size == 3) ManwRemoteAccessibilityService.tap(parts[1].toFloatOrNull() ?: -1f, parts[2].toFloatOrNull() ?: -1f)
+                                        "SWIPE" -> if (parts.size == 6) ManwRemoteAccessibilityService.swipe(
+                                            parts[1].toFloatOrNull() ?: -1f, parts[2].toFloatOrNull() ?: -1f,
+                                            parts[3].toFloatOrNull() ?: -1f, parts[4].toFloatOrNull() ?: -1f,
+                                            parts[5].toLongOrNull() ?: 350L
+                                        )
+                                    }
+                                }
+                            } catch (_: Exception) { }
+                        }.apply { name = "MANW-Input-Commands"; isDaemon = true; start() }
                         try { while (!socket.isClosed && streaming.get()) Thread.sleep(250) }
                         finally { streaming.set(false); streamOut = null }
                     }
