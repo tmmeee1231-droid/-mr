@@ -246,14 +246,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 } else {
                                     Text("التطبيقات", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Card(colors = CardDefaults.cardColors(containerColor = Panel.copy(alpha = 0.96f))) {
-                                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text(shizukuStatus, color = Color.White, fontSize = 13.sp)
-                                            Button(onClick = { connectShizuku() }, modifier = Modifier.fillMaxWidth()) {
-                                                Text("الاتصال بـ Shizuku")
-                                            }
-                                        }
-                                    }
                                     val visibleApps = apps.filter { it.packageName !in hidden }
                                     if (visibleApps.isEmpty()) {
                                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
