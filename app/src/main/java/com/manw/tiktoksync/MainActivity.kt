@@ -235,15 +235,11 @@ class MainActivity : ComponentActivity() {
                                                         Text(app.packageName, color = Color.Gray, fontSize = 10.sp)
                                                     }
                                                     OutlinedButton(onClick = {
-                                                        changePackageState(app, true) { success, message ->
-                                                            infoMessage = message
-                                                            if (success) {
-                                                                hidden.remove(app.packageName)
-                                                                saveHidden()
-                                                                apps = installedLaunchableApps()
-                                                            }
-                                                        }
-                                                    }) { Text("إظهار") }
+                                                        hidden.remove(app.packageName)
+                                                        saveHidden()
+                                                        apps = installedLaunchableApps()
+                                                        infoMessage = "تمت إعادة التطبيق إلى القائمة"
+                                                    }) { Text("إرجاع") }
                                                 }
                                             }
                                         }
