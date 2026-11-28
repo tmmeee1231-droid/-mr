@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import java.security.MessageDigest
 import android.app.role.RoleManager
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -89,6 +90,10 @@ class MainActivity : ComponentActivity() {
                 var search by remember { mutableStateOf("") }
                 var message by remember { mutableStateOf("") }
                 var pendingApp by remember { mutableStateOf<LaunchableApp?>(null) }
+                var passwordDialog by remember { mutableStateOf(false) }
+                var passwordSetup by remember { mutableStateOf(false) }
+                var passwordInput by remember { mutableStateOf("") }
+                var passwordError by remember { mutableStateOf("") }
                 val homeRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                     message = if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)) "تم تعيين MANW كشاشة رئيسية" else "لم يتم تعيين MANW كشاشة رئيسية"
                 }
@@ -102,9 +107,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                fun saveHidden() {
-                    prefs.edit().putStringSet("hidden_packages", hidden.toSet()).apply()
-                }
+                fun saveHidden() { prefs.edit().putStringSet("hidden_packages", hidden.toSet()).apply() }
+                fun enterSecretArea() { passwordInput=""; passwordError=""; passwordSetup=prefs.getString("secret_password_hash",null).isNullOrBlank(); passwordDialog=true }
+                fun passwordHash(value:String):String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 
                 @Composable
                 fun NeonCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
@@ -125,7 +130,7 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("MANW", modifier = Modifier.combinedClickable(onClick = { titleTaps++; if (titleTaps >= 5) { secretPanel = true; titleTaps = 0 } }, onLongClick = { }), color = Neon, fontSize = if (compact) 27.sp else 34.sp, fontWeight = FontWeight.Black)
+                            Text("MANW", modifier = Modifier.combinedClickable(onClick = { titleTaps++; if (titleTaps >= 5) { enterSecretArea(); titleTaps = 0 } }, onLongClick = { }), color = Neon, fontSize = if (compact) 27.sp else 34.sp, fontWeight = FontWeight.Black)
                             Text("AHMED", color = Color.White, fontSize = if (compact) 17.sp else 21.sp, fontWeight = FontWeight.ExtraBold)
                         }
                         Text("☠", color = Neon, fontSize = if (compact) 42.sp else 54.sp)
@@ -324,7 +329,7 @@ class MainActivity : ComponentActivity() {
                                     NeonCard(Modifier.fillMaxWidth()) {
                                         Text("الأمان والخصوصية",color=Color.White,fontWeight=FontWeight.Bold)
                                         Text("التطبيقات في أمان MANW تختفي من قائمة MANW فقط.",color=Muted,fontSize=11.sp)
-                                        OutlinedButton(onClick={secretPanel=true},modifier=Modifier.fillMaxWidth()){Text("فتح منطقة الأمان",color=Neon)}
+                                        OutlinedButton(onClick={enterSecretArea()},modifier=Modifier.fillMaxWidth()){Text("فتح منطقة الأمان",color=Neon)}
                                     }
                                     OutlinedButton(onClick={themeIndex=0;wallpaperIndex=0;iconStyle=0;prefs.edit().putInt("theme_index",0).putInt("wallpaper_index",0).putInt("icon_style",0).apply()},modifier=Modifier.fillMaxWidth()){Text("إعادة ضبط المظهر")}
                                 }
@@ -335,6 +340,7 @@ class MainActivity : ComponentActivity() {
                         }
                         if (!secretPanel) NavBar()
                     }
+                    if (passwordDialog) AlertDialog(onDismissRequest={passwordDialog=false},containerColor=CardBlack,title={Text(if(passwordSetup) "إنشاء كلمة مرور" else "كلمة مرور منطقة الأمان",color=Neon)},text={Column { OutlinedTextField(value=passwordInput,onValueChange={passwordInput=it;passwordError=""},singleLine=true,label={Text("كلمة المرور")},visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation()); if(passwordError.isNotBlank()) Text(passwordError,color=Neon) }},confirmButton={TextButton(onClick={if(passwordInput.length<4) passwordError="اكتب 4 أحرف أو أرقام على الأقل" else if(passwordSetup){prefs.edit().putString("secret_password_hash",passwordHash(passwordInput)).apply();passwordDialog=false;secretPanel=true} else if(passwordHash(passwordInput)==prefs.getString("secret_password_hash","")){passwordDialog=false;secretPanel=true}else passwordError="كلمة المرور غير صحيحة"}){Text(if(passwordSetup) "حفظ وفتح" else "دخول",color=Neon)}},dismissButton={TextButton(onClick={passwordDialog=false}){Text("إلغاء",color=Muted)}})
                     pendingApp?.let { selected ->
                         AlertDialog(onDismissRequest={pendingApp=null},containerColor=CardBlack,
                             title={Text("تأكيد وضع التطبيق في الأمان",color=Neon,fontWeight=FontWeight.Bold)},
