@@ -1,4 +1,4 @@
-name: Build MANW TikTok APK
+name: Build MANW APKs
 on:
   workflow_dispatch:
   push:
@@ -8,7 +8,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -18,9 +18,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build all MANW APKs
+        run: gradle --no-daemon :app:assembleDebug :controller:assembleDebug :agent:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: MANW-TikTok-debug
+          name: MANW-Controller-debug
+          path: controller/build/outputs/apk/debug/controller-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MANW-Agent-debug
+          path: agent/build/outputs/apk/debug/agent-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MANW-Legacy-debug
           path: app/build/outputs/apk/debug/app-debug.apk
