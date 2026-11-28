@@ -3,11 +3,11 @@ package com.manw.agent
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
-import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityEvent\nimport android.view.accessibility.AccessibilityNodeInfo\nimport android.os.Bundle
 
 class ManwRemoteAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() { super.onServiceConnected(); active = this }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}\n\n    private fun performGlobalAction(action: Int) { performGlobalAction(action) }\n\n    private fun performTypeText(value: String) {\n        val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return\n        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value.take(500)) }\n        node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)\n    }
     override fun onInterrupt() {}
     override fun onDestroy() { if (active === this) active = null; super.onDestroy() }
 
@@ -35,7 +35,7 @@ class ManwRemoteAccessibilityService : AccessibilityService() {
 
     companion object {
         @Volatile private var active: ManwRemoteAccessibilityService? = null
-        fun tap(x: Float, y: Float) { active?.performTap(x, y) }
+        fun tap(x: Float, y: Float) { active?.performTap(x, y) }\n        fun globalAction(action: Int) { active?.performGlobalAction(action) }\n        fun typeText(value: String) { active?.performTypeText(value) }
         fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, duration: Long) {
             active?.performSwipe(x1, y1, x2, y2, duration)
         }
