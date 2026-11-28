@@ -4,6 +4,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.net.Uri
+import android.graphics.BitmapFactory
 import java.security.MessageDigest
 import android.app.role.RoleManager
 import android.os.Build
@@ -30,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +80,8 @@ class MainActivity : ComponentActivity() {
                 var themeIndex by remember { mutableIntStateOf(prefs.getInt("theme_index", 0)) }
                 var wallpaperIndex by remember { mutableIntStateOf(prefs.getInt("wallpaper_index", 0)) }
                 var iconStyle by remember { mutableIntStateOf(prefs.getInt("icon_style", 0)) }
+                var wallpaperUri by remember { mutableStateOf(prefs.getString("custom_wallpaper", null)?.let(Uri::parse)) }
+                val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri!=null){runCatching{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)};wallpaperUri=uri;prefs.edit().putString("custom_wallpaper",uri.toString()).apply()} }
                 val Neon = listOf(Color(0xFFFF202A), Color(0xFF00D9FF), Color(0xFFB56BFF), Color(0xFF00E676), Color(0xFFFFB300))[themeIndex.coerceIn(0,4)]
                 val NeonDark = listOf(Color(0xFF8D080D), Color(0xFF07536A), Color(0xFF542B78), Color(0xFF075A37), Color(0xFF704600))[themeIndex.coerceIn(0,4)]
                 var page by remember { mutableStateOf("home") }
@@ -165,6 +171,8 @@ class MainActivity : ComponentActivity() {
                     3 -> Brush.verticalGradient(listOf(Color(0xFF09251D), Black, Color(0xFF050D0A)))
                     else -> Brush.verticalGradient(listOf(Color(0xFF160506), Black, Color(0xFF090506)))
                 })) {
+                    val customWallpaper = remember(wallpaperUri) { wallpaperUri?.let { u -> runCatching { contentResolver.openInputStream(u)?.use { BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() } }
+                    if(customWallpaper!=null) androidx.compose.foundation.Image(BitmapPainter(customWallpaper),contentDescription="الخلفية المختارة",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
                     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp)) {
                         if (!secretPanel) Header(compact = page != "home")
                         when {
@@ -272,7 +280,7 @@ class MainActivity : ComponentActivity() {
                                                 .background(Brush.verticalGradient(listOf(Color(0xFF21090B), Color(0xFF0C090A))))
                                                 .combinedClickable(onClick = {
                                                     packageManager.getLaunchIntentForPackage(app.packageName)?.let { startActivity(it) } ?: run { message = "تعذر فتح التطبيق" }
-                                                }, onLongClick = { if (app.packageName !in hidden) pendingApp = app }).padding(vertical = 10.dp, horizontal = 3.dp),
+                                                }, onLongClick = { if (app.packageName !in hidden) { hidden.add(app.packageName); prefs.edit().putString("label_" + app.packageName, app.label).putStringSet("hidden_packages", hidden.toSet()).apply(); message="تم وضع التطبيق في أمان MANW" } }).padding(vertical = 10.dp, horizontal = 3.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             val icon = remember(app.packageName) {
@@ -309,6 +317,11 @@ class MainActivity : ComponentActivity() {
                                                 RadioButton(selected=wallpaperIndex==i,onClick={wallpaperIndex=i;prefs.edit().putInt("wallpaper_index",i).apply()})
                                             }
                                         }
+                                    }
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("خلفية من معرض الهاتف",color=Color.White,fontWeight=FontWeight.Bold)
+                                        Button(onClick={wallpaperPicker.launch(arrayOf("image/*"))},modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=NeonDark)){Text("اختيار صورة من الهاتف")}
+                                        OutlinedButton(onClick={wallpaperUri=null;prefs.edit().remove("custom_wallpaper").apply()},modifier=Modifier.fillMaxWidth()){Text("إزالة الخلفية الخاصة",color=Neon)}
                                     }
                                     NeonCard(Modifier.fillMaxWidth()) {
                                         Text("شكل الأيقونات",color=Color.White,fontWeight=FontWeight.Bold)
