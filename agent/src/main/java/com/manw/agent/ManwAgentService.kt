@@ -161,6 +161,10 @@ class ManwAgentService : Service() {
                                             parts[3].toFloatOrNull() ?: -1f, parts[4].toFloatOrNull() ?: -1f,
                                             parts[5].toLongOrNull() ?: 350L
                                         )
+                                        "BACK" -> ManwRemoteAccessibilityService.globalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                                        "HOME" -> ManwRemoteAccessibilityService.globalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                                        "RECENTS" -> ManwRemoteAccessibilityService.globalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)
+                                        "TYPE" -> if (parts.size == 2) ManwRemoteAccessibilityService.typeText(parts[1])
                                     }
                                 }
                             } catch (_: Exception) { }
