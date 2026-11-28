@@ -7,6 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -21,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 private val Red = Color(0xFFFF2638)
@@ -29,6 +34,7 @@ private val Panel = Color(0xFF171014)
 
 class MainActivity : ComponentActivity() {
     private var streamSocket: Socket? = null
+    @Volatile private var commandOutput: OutputStream? = null
     private val streaming = AtomicBoolean(false)
     override fun onDestroy() { stopScreen(); super.onDestroy() }
 
@@ -36,8 +42,9 @@ class MainActivity : ComponentActivity() {
         streaming.set(false)
         runCatching { streamSocket?.close() }
         streamSocket = null
+        commandOutput = null
     }
-    private fun readLine(input: java.io.InputStream): String {
+    private fun sendInput(command: String) { runCatching { synchronized(commandOutput ?: return) { commandOutput?.write((command + "\\n").toByteArray()); commandOutput?.flush() } } }\n    private fun readLine(input: java.io.InputStream): String {
         val bytes = ByteArrayOutputStream()
         while (bytes.size() < 256) {
             val b = input.read()
@@ -69,7 +76,7 @@ class MainActivity : ComponentActivity() {
                                 try {
                                     Socket().use { s ->
                                         s.connect(InetSocketAddress(ip.trim(), 45821), 5000); s.soTimeout = 0
-                                        val input = s.getInputStream(); val out = s.getOutputStream()
+                                        val input = s.getInputStream(); val out = s.getOutputStream()\n                                        streamSocket = s\n                                        commandOutput = out
                                         out.write("PAIR|$pin\nSCREEN\n".toByteArray()); out.flush()
                                         val reply = readLine(input)
                                         check(reply == "PAIRED") { if (reply == "DENIED") "رمز الربط غير صحيح" else "فشل التحقق: $reply" }
@@ -95,11 +102,27 @@ class MainActivity : ComponentActivity() {
                     Text(status, color = if (status == "SCREEN LIVE") Color(0xFF57E389) else Color.White)
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), modifier = Modifier.fillMaxWidth().weight(1f)) {
                         Box(Modifier.fillMaxSize().padding(6.dp)) {
-                            if (screen != null) Image(screen!!, contentDescription = "مشاركة شاشة الهاتف", modifier = Modifier.fillMaxSize())
+                            if (screen != null) {
+                                Image(screen!!, contentDescription = "مشاركة شاشة الهاتف", modifier = Modifier.fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures { p -> sendInput("TAP|"+(p.x/size.width)+"|"+(p.y/size.height)) }
+                                    }
+                                    .pointerInput(Unit) {
+                                        var start = Offset.Zero
+                                        var end = Offset.Zero
+                                        detectDragGestures(
+                                            onDragStart = { start = it; end = it },
+                                            onDrag = { change, _ -> end = change.position },
+                                            onDragEnd = {
+                                                sendInput("SWIPE|"+(start.x/size.width)+"|"+(start.y/size.height)+"|"+(end.x/size.width)+"|"+(end.y/size.height)+"|400")
+                                            }
+                                        )
+                                    })
+                            }
                             else Text("ستظهر شاشة الهاتف هنا بعد موافقة صاحبه", color = Color.Gray)
                         }
                     }
-                    Text("اتصال محلي عبر Wi-Fi / Hotspot فقط. العرض لا يمنح التحكم باللمس بعد.", color = Color.Gray, fontSize = 11.sp)
+                    Text("اضغط على الشاشة أو اسحب للتحكم. يلزم تفعيل خدمة إمكانية الوصول يدويًا على الهاتف الهدف.", color = Color.Gray, fontSize = 11.sp)
                 }
             }
         }
