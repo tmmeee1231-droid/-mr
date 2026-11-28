@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("MANW", color = Neon, fontSize = if (compact) 27.sp else 34.sp, fontWeight = FontWeight.Black)
+                            Text("MANW", modifier = Modifier.combinedClickable(onClick = { titleTaps++; if (titleTaps >= 5) { secretPanel = true; titleTaps = 0 } }, onLongClick = { }), color = Neon, fontSize = if (compact) 27.sp else 34.sp, fontWeight = FontWeight.Black)
                             Text("AHMED", color = Color.White, fontSize = if (compact) 17.sp else 21.sp, fontWeight = FontWeight.ExtraBold)
                         }
                         Text("☠", color = Neon, fontSize = if (compact) 42.sp else 54.sp)
