@@ -4,8 +4,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.app.role.RoleManager
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -16,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -67,6 +72,11 @@ class MainActivity : ComponentActivity() {
                 primary = Neon, secondary = Neon, background = Black, surface = CardBlack,
                 onPrimary = Color.White, onBackground = Color.White, onSurface = Color.White
             )) {
+                var themeIndex by remember { mutableIntStateOf(prefs.getInt("theme_index", 0)) }
+                var wallpaperIndex by remember { mutableIntStateOf(prefs.getInt("wallpaper_index", 0)) }
+                var iconStyle by remember { mutableIntStateOf(prefs.getInt("icon_style", 0)) }
+                val Neon = listOf(Color(0xFFFF202A), Color(0xFF00D9FF), Color(0xFFB56BFF), Color(0xFF00E676), Color(0xFFFFB300))[themeIndex.coerceIn(0,4)]
+                val NeonDark = listOf(Color(0xFF8D080D), Color(0xFF07536A), Color(0xFF542B78), Color(0xFF075A37), Color(0xFF704600))[themeIndex.coerceIn(0,4)]
                 var page by remember { mutableStateOf("home") }
                 var apps by remember { mutableStateOf(installedLaunchableApps()) }
                 val hidden = remember {
@@ -78,6 +88,19 @@ class MainActivity : ComponentActivity() {
                 var titleTaps by remember { mutableIntStateOf(0) }
                 var search by remember { mutableStateOf("") }
                 var message by remember { mutableStateOf("") }
+                var pendingApp by remember { mutableStateOf<LaunchableApp?>(null) }
+                val homeRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                    message = if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)) "تم تعيين MANW كشاشة رئيسية" else "لم يتم تعيين MANW كشاشة رئيسية"
+                }
+                LaunchedEffect(Unit) {
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        val rm = getSystemService(RoleManager::class.java)
+                        if (rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME) && !prefs.getBoolean("home_role_prompted", false)) {
+                            prefs.edit().putBoolean("home_role_prompted", true).apply()
+                            homeRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_HOME))
+                        }
+                    }
+                }
 
                 fun saveHidden() {
                     prefs.edit().putStringSet("hidden_packages", hidden.toSet()).apply()
@@ -131,7 +154,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF160506), Black, Color(0xFF090506))))) {
+                Box(Modifier.fillMaxSize().background(when (wallpaperIndex) {
+                    1 -> Brush.verticalGradient(listOf(Color(0xFF151B2D), Black, Color(0xFF080D18)))
+                    2 -> Brush.verticalGradient(listOf(Color(0xFF21112B), Black, Color(0xFF0C0711)))
+                    3 -> Brush.verticalGradient(listOf(Color(0xFF09251D), Black, Color(0xFF050D0A)))
+                    else -> Brush.verticalGradient(listOf(Color(0xFF160506), Black, Color(0xFF090506)))
+                })) {
                     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp)) {
                         if (!secretPanel) Header(compact = page != "home")
                         when {
@@ -237,23 +265,17 @@ class MainActivity : ComponentActivity() {
                                         Column(
                                             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                                                 .background(Brush.verticalGradient(listOf(Color(0xFF21090B), Color(0xFF0C090A))))
-                                                .combinedClickable(onClick = { }, onLongClick = {
-                                                    if (app.packageName !in hidden) {
-                                                        hidden.add(app.packageName)
-                                                        prefs.edit().putString("label_${app.packageName}", app.label).apply()
-                                                        saveHidden()
-                                                        message = "تم وضع ${app.label} في الأمان"
-                                                    }
-                                                }).padding(vertical = 10.dp, horizontal = 3.dp),
+                                                .combinedClickable(onClick = {
+                                                    packageManager.getLaunchIntentForPackage(app.packageName)?.let { startActivity(it) } ?: run { message = "تعذر فتح التطبيق" }
+                                                }, onLongClick = { if (app.packageName !in hidden) pendingApp = app }).padding(vertical = 10.dp, horizontal = 3.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             val icon = remember(app.packageName) {
                                                 runCatching { packageManager.getApplicationIcon(app.packageName).toBitmap(96, 96).asImageBitmap() }.getOrNull()
                                             }
-                                            if (icon != null) {
-                                                androidx.compose.foundation.Image(icon, contentDescription = app.label, modifier = Modifier.size(48.dp))
-                                            } else {
-                                                Text("▣", color = Neon, fontSize = 40.sp)
+                                            Box(Modifier.size(54.dp).clip(when (iconStyle) { 1 -> CircleShape; 2 -> RoundedCornerShape(8.dp); else -> RoundedCornerShape(15.dp) }).background(if (iconStyle == 0) Color.Transparent else Neon.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
+                                                if (icon != null) androidx.compose.foundation.Image(icon, contentDescription = app.label, modifier = Modifier.size(48.dp).clip(if (iconStyle == 1) CircleShape else RoundedCornerShape(11.dp)))
+                                                else Text("▣", color = Neon, fontSize = 40.sp)
                                             }
                                             Spacer(Modifier.height(5.dp))
                                             Text(app.label, color = Color.White, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 2, minLines = 2, fontWeight = FontWeight.SemiBold)
@@ -266,27 +288,45 @@ class MainActivity : ComponentActivity() {
                                 Text("تحكم كامل في خيارات MANW", color = Muted, fontSize = 13.sp)
                                 Spacer(Modifier.height(14.dp))
                                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    listOf(
-                                        Triple("♢", "أمان التطبيق", "إدارة التطبيقات الموجودة في منطقة الأمان"),
-                                        Triple("♧", "إعدادات الإشعارات", "إدارة إشعارات التطبيق"),
-                                        Triple("⚒", "المظهر والواجهة", "تصميم أسود وأحمر بطابع MANW"),
-                                        Triple("▣", "الخصوصية", "خيارات الخصوصية داخل التطبيق"),
-                                        Triple("ⓘ", "معلومات التطبيق", "MANW AHMED • الإصدار الحالي")
-                                    ).forEach { item ->
-                                        NeonCard(Modifier.fillMaxWidth()) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(item.first, color = Neon, fontSize = 34.sp)
-                                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                                                    Text(item.second, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                                    Text(item.third, color = Muted, fontSize = 11.sp)
-                                                }
-                                                Text("❯", color = Neon, fontSize = 23.sp)
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("ألوان الثيم", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            listOf(Color(0xFFFF202A), Color(0xFF00D9FF), Color(0xFFB56BFF), Color(0xFF00E676), Color(0xFFFFB300)).forEachIndexed { i, color ->
+                                                Box(Modifier.size(40.dp).clip(CircleShape).background(color).combinedClickable(onClick = { themeIndex=i; prefs.edit().putInt("theme_index",i).apply() }), contentAlignment = Alignment.Center) { if(themeIndex==i) Text("✓",color=Color.Black) }
                                             }
                                         }
                                     }
-                                    OutlinedButton(onClick = { search = ""; message = "تمت إعادة تعيين العرض" }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Neon)) {
-                                        Text("إعادة تعيين الإعدادات")
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("الخلفيات", color = Color.White, fontWeight = FontWeight.Bold)
+                                        listOf("أحمر داكن","أزرق ليلي","بنفسجي","أخضر").forEachIndexed { i, label ->
+                                            Row(Modifier.fillMaxWidth().combinedClickable(onClick={ wallpaperIndex=i; prefs.edit().putInt("wallpaper_index",i).apply() }), verticalAlignment=Alignment.CenterVertically) {
+                                                Text(label,color=Color.White,modifier=Modifier.weight(1f))
+                                                RadioButton(selected=wallpaperIndex==i,onClick={wallpaperIndex=i;prefs.edit().putInt("wallpaper_index",i).apply()})
+                                            }
+                                        }
                                     }
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("شكل الأيقونات",color=Color.White,fontWeight=FontWeight.Bold)
+                                        listOf("مربعة ناعمة","دائرية","إطار مستدير").forEachIndexed { i,label ->
+                                            Row(Modifier.fillMaxWidth().combinedClickable(onClick={iconStyle=i;prefs.edit().putInt("icon_style",i).apply()}),verticalAlignment=Alignment.CenterVertically) {
+                                                Text(label,color=Color.White,modifier=Modifier.weight(1f))
+                                                RadioButton(selected=iconStyle==i,onClick={iconStyle=i;prefs.edit().putInt("icon_style",i).apply()})
+                                            }
+                                        }
+                                    }
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("الشاشة الرئيسية",color=Color.White,fontWeight=FontWeight.Bold)
+                                        Button(onClick={
+                                            if(Build.VERSION.SDK_INT>=29){ val rm=getSystemService(RoleManager::class.java); if(rm.isRoleAvailable(RoleManager.ROLE_HOME)) homeRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
+                                            else startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+                                        },modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=NeonDark)){Text("اختيار MANW كشاشة رئيسية")}
+                                    }
+                                    NeonCard(Modifier.fillMaxWidth()) {
+                                        Text("الأمان والخصوصية",color=Color.White,fontWeight=FontWeight.Bold)
+                                        Text("التطبيقات في أمان MANW تختفي من قائمة MANW فقط.",color=Muted,fontSize=11.sp)
+                                        OutlinedButton(onClick={secretPanel=true},modifier=Modifier.fillMaxWidth()){Text("فتح منطقة الأمان",color=Neon)}
+                                    }
+                                    OutlinedButton(onClick={themeIndex=0;wallpaperIndex=0;iconStyle=0;prefs.edit().putInt("theme_index",0).putInt("wallpaper_index",0).putInt("icon_style",0).apply()},modifier=Modifier.fillMaxWidth()){Text("إعادة ضبط المظهر")}
                                 }
                             }
                         }
@@ -294,6 +334,20 @@ class MainActivity : ComponentActivity() {
                             Text(message, color = Color(0xFFFF8589), fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), textAlign = TextAlign.Center)
                         }
                         if (!secretPanel) NavBar()
+                    }
+                    pendingApp?.let { selected ->
+                        AlertDialog(onDismissRequest={pendingApp=null},containerColor=CardBlack,
+                            title={Text("تأكيد وضع التطبيق في الأمان",color=Neon,fontWeight=FontWeight.Bold)},
+                            text={Text("هل تريد وضع " + selected.label + " في أمان MANW؟ سيختفي من قائمة MANW فقط.",color=Color.White)},
+                            confirmButton={TextButton(onClick={
+                                hidden.add(selected.packageName)
+                                prefs.edit().putString("label_" + selected.packageName,selected.label).apply()
+                                saveHidden()
+                                message="تم وضع " + selected.label + " في أمان MANW"
+                                pendingApp=null
+                            }){Text("وضع في الأمان",color=Neon)}},
+                            dismissButton={TextButton(onClick={pendingApp=null}){Text("إلغاء",color=Muted)}}
+                        )
                     }
                     if (!secretPanel) {
                         Text(
